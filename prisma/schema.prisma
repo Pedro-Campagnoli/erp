@@ -185,6 +185,10 @@ model UserRole {
 
   createdAt DateTime @default(now())
 
+  @@index([userId])
+  @@index([storeId])
+  @@index([roleId])
+
   @@unique([userId, roleId, storeId])
   @@map("user_roles")
 }

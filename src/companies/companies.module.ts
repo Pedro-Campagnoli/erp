@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { StoreModule } from '../store/store.module';
-import { CompanyController } from './company.controller';
-import { CompanyService } from './company.service';
+import { CompanyController } from './companies.controller';
+import { CompanyService } from './companies.service';
 
 @Module({
   controllers: [CompanyController],
