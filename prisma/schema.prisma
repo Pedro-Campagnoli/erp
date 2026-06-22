@@ -1,0 +1,77 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Company {
+  id       String    @id @default(uuid())
+  name     String
+  cnpj     String?   @unique
+  active   Boolean   @default(true)
+  planId   String
+  plan     Plan      @relation(fields: [planId], references: [id])
+  users    User[]
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id        String    @id @default(uuid())
+  name      String
+  email     String
+  password  String
+  companyId String
+  company   Company   @relation(fields: [companyId], references: [id])
+  active    Boolean   @default(true)
+  role      Role
+  createdAt DateTime  @default(now())
+  sessions  Session[]
+
+  @@unique([companyId, email])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  refreshToken String   @unique
+  expiresAt    DateTime
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+model Plan {
+  id        String    @id @default(uuid())
+  name      String
+  maxUsers  Int
+  price     Decimal
+  companies Company[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Product {
+  id        String   @id @default(uuid())
+  name      String
+  price     Decimal
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
