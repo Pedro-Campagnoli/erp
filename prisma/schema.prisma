@@ -1,77 +1,272 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// ─────────────────────────────────────────────
+// Generator & Datasource
+// ─────────────────────────────────────────────
 
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
 }
 
-model Company {
-  id       String    @id @default(uuid())
-  name     String
-  cnpj     String?   @unique
-  active   Boolean   @default(true)
-  planId   String
-  plan     Plan      @relation(fields: [planId], references: [id])
-  users    User[]
-  products Product[]
+// ─────────────────────────────────────────────
+// Plan (controla limites por empresa)
+// ─────────────────────────────────────────────
+
+model Plan {
+  id        String    @id @default(uuid())
+  name      String
+  maxUsers  Int
+  maxStores Int       @default(1)
+  price     Decimal   @db.Decimal(10, 2)
+  companies Company[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("plans")
 }
 
-model User {
-  id        String    @id @default(uuid())
-  name      String
-  email     String
-  password  String
+// ─────────────────────────────────────────────
+// Company Module
+// ─────────────────────────────────────────────
+
+model Company {
+  id     String  @id @default(uuid())
+  name   String
+  cnpj   String? @unique
+  active Boolean @default(true)
+
+  planId String
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  users   User[]
+  stores  Store[]
+  roles   Role[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("companies")
+}
+
+// ─────────────────────────────────────────────
+// Store Module
+// ─────────────────────────────────────────────
+
+model Store {
+  id     String  @id @default(uuid())
+  name   String
+  active Boolean @default(true)
+
   companyId String
-  company   Company   @relation(fields: [companyId], references: [id])
-  active    Boolean   @default(true)
-  role      Role
-  createdAt DateTime  @default(now())
+  company   Company @relation(fields: [companyId], references: [id])
+
+  products         Product[]
+  sales            Sale[]
+  financialEntries FinancialEntry[]
+  userRoles        UserRole[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("stores")
+}
+
+// ─────────────────────────────────────────────
+// Access Control — User Module
+// ─────────────────────────────────────────────
+
+model User {
+  id       String  @id @default(uuid())
+  name     String
+  email    String
+  password String
+  active   Boolean @default(true)
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
   sessions  Session[]
+  userRoles UserRole[]
+  sales     Sale[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([companyId, email])
+  @@map("users")
 }
 
 model Session {
   id           String   @id @default(uuid())
   refreshToken String   @unique
   expiresAt    DateTime
-  userId       String
-  user         User     @relation(fields: [userId], references: [id])
-  createdAt    DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("sessions")
 }
 
-enum Role {
-  OWNER
-  ADMIN
-  MANAGER
-  EMPLOYEE
-}
+// ─────────────────────────────────────────────
+// Access Control — Role Module
+// ─────────────────────────────────────────────
 
-model Plan {
-  id        String    @id @default(uuid())
-  name      String
-  maxUsers  Int
-  price     Decimal
-  companies Company[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-}
+model Role {
+  id   String @id @default(uuid())
+  name String
 
-model Product {
-  id        String   @id @default(uuid())
-  name      String
-  price     Decimal
+  // isGlobal = true  → vale para toda a Company (ex: OWNER, ADMIN)
+  // isGlobal = false → scoped por Store via UserRole.storeId
+  isGlobal Boolean @default(false)
+
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id])
+  company   Company @relation(fields: [companyId], references: [id])
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@map("roles")
+}
+
+// ─────────────────────────────────────────────
+// Access Control — Permission Module
+// ─────────────────────────────────────────────
+
+model Permission {
+  id       String @id @default(uuid())
+  resource String // ex: "inventory", "sales", "financial"
+  action   String // ex: "read", "write", "delete"
+
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+// Tabela de junção Role ↔ Permission
+model RolePermission {
+  id String @id @default(uuid())
+
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// Tabela de junção User ↔ Role (com escopo opcional de Store)
+// storeId == null → acesso em nível de Company (Admin+)
+// storeId != null → acesso restrito à Store específica
+model UserRole {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  storeId String?
+  store   Store?  @relation(fields: [storeId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, roleId, storeId])
+  @@map("user_roles")
+}
+
+// ─────────────────────────────────────────────
+// Inventory Module
+// ─────────────────────────────────────────────
+
+model Product {
+  id    String  @id @default(uuid())
+  name  String
+  sku   String?
+  price Decimal @db.Decimal(10, 2)
+  cost  Decimal @default(0) @db.Decimal(10, 2)
+  stock Int     @default(0)
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id])
+
+  saleItems SaleItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, sku])
+  @@map("products")
+}
+
+// ─────────────────────────────────────────────
+// Sales Module
+// ─────────────────────────────────────────────
+
+model Sale {
+  id    String      @id @default(uuid())
+  total Decimal     @db.Decimal(10, 2)
+  items SaleItem[]
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id        String  @id @default(uuid())
+  quantity  Int
+  unitPrice Decimal @db.Decimal(10, 2)
+
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id])
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@map("sale_items")
+}
+
+// ─────────────────────────────────────────────
+// Financial Module
+// ─────────────────────────────────────────────
+
+model FinancialEntry {
+  id          String           @id @default(uuid())
+  type        FinancialType
+  amount      Decimal          @db.Decimal(10, 2)
+  description String?
+  date        DateTime         @default(now())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("financial_entries")
+}
+
+enum FinancialType {
+  INCOME
+  EXPENSE
 }
