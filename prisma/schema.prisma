@@ -4,7 +4,7 @@
 
 generator client {
   provider     = "prisma-client"
-  output       = "../generated/prisma"
+  output       = "../src/generated/prisma"
   moduleFormat = "cjs"
 }
 
@@ -13,7 +13,7 @@ datasource db {
 }
 
 // ─────────────────────────────────────────────
-// Plan (controla limites por empresa)
+// Plan
 // ─────────────────────────────────────────────
 
 model Plan {
@@ -31,7 +31,7 @@ model Plan {
 }
 
 // ─────────────────────────────────────────────
-// Company Module
+// Company
 // ─────────────────────────────────────────────
 
 model Company {
@@ -43,9 +43,8 @@ model Company {
   planId String
   plan   Plan   @relation(fields: [planId], references: [id])
 
-  users   User[]
-  stores  Store[]
-  roles   Role[]
+  users  User[]
+  stores Store[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -54,7 +53,7 @@ model Company {
 }
 
 // ─────────────────────────────────────────────
-// Store Module
+// Store
 // ─────────────────────────────────────────────
 
 model Store {
@@ -68,7 +67,7 @@ model Store {
   products         Product[]
   sales            Sale[]
   financialEntries FinancialEntry[]
-  userRoles        UserRole[]
+  userStores       UserStore[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -77,7 +76,7 @@ model Store {
 }
 
 // ─────────────────────────────────────────────
-// Access Control — User Module
+// User
 // ─────────────────────────────────────────────
 
 model User {
@@ -86,13 +85,14 @@ model User {
   email    String
   password String
   active   Boolean @default(true)
+  isOwner  Boolean @default(false)  // acesso total à company, ignora UserStore
 
   companyId String
   company   Company @relation(fields: [companyId], references: [id])
 
-  sessions  Session[]
-  userRoles UserRole[]
-  sales     Sale[]
+  sessions   Session[]
+  sales      Sale[]
+  userStores UserStore[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -115,86 +115,34 @@ model Session {
 }
 
 // ─────────────────────────────────────────────
-// Access Control — Role Module
+// UserStore (acesso por loja)
 // ─────────────────────────────────────────────
 
-model Role {
-  id   String @id @default(uuid())
-  name String
-
-  // isGlobal = true  → vale para toda a Company (ex: OWNER, ADMIN)
-  // isGlobal = false → scoped por Store via UserRole.storeId
-  isGlobal Boolean @default(false)
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  userRoles       UserRole[]
-  rolePermissions RolePermission[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([companyId, name])
-  @@map("roles")
-}
-
-// ─────────────────────────────────────────────
-// Access Control — Permission Module
-// ─────────────────────────────────────────────
-
-model Permission {
-  id       String @id @default(uuid())
-  resource String // ex: "inventory", "sales", "financial"
-  action   String // ex: "read", "write", "delete"
-
-  rolePermissions RolePermission[]
-
-  @@unique([resource, action])
-  @@map("permissions")
-}
-
-// Tabela de junção Role ↔ Permission
-model RolePermission {
-  id String @id @default(uuid())
-
-  roleId String
-  role   Role   @relation(fields: [roleId], references: [id])
-
-  permissionId String
-  permission   Permission @relation(fields: [permissionId], references: [id])
-
-  @@unique([roleId, permissionId])
-  @@map("role_permissions")
-}
-
-// Tabela de junção User ↔ Role (com escopo opcional de Store)
-// storeId == null → acesso em nível de Company (Admin+)
-// storeId != null → acesso restrito à Store específica
-model UserRole {
+model UserStore {
   id String @id @default(uuid())
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
 
-  roleId String
-  role   Role   @relation(fields: [roleId], references: [id])
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id])
 
-  storeId String?
-  store   Store?  @relation(fields: [storeId], references: [id])
+  role UserRole
 
   createdAt DateTime @default(now())
 
-  @@index([userId])
-  @@index([storeId])
-  @@index([roleId])
+  @@unique([userId, storeId])
+  @@map("user_stores")
+}
 
-  @@unique([userId, roleId, storeId])
-  @@map("user_roles")
+enum UserRole {
+  OWNER
+  ADMIN
+  EMPLOYEE
 }
 
 // ─────────────────────────────────────────────
-// Inventory Module
+// Inventory
 // ─────────────────────────────────────────────
 
 model Product {
@@ -218,12 +166,12 @@ model Product {
 }
 
 // ─────────────────────────────────────────────
-// Sales Module
+// Sales
 // ─────────────────────────────────────────────
 
 model Sale {
-  id    String      @id @default(uuid())
-  total Decimal     @db.Decimal(10, 2)
+  id    String     @id @default(uuid())
+  total Decimal    @db.Decimal(10, 2)
   items SaleItem[]
 
   storeId String
@@ -252,15 +200,15 @@ model SaleItem {
 }
 
 // ─────────────────────────────────────────────
-// Financial Module
+// Financial
 // ─────────────────────────────────────────────
 
 model FinancialEntry {
-  id          String           @id @default(uuid())
+  id          String        @id @default(uuid())
   type        FinancialType
-  amount      Decimal          @db.Decimal(10, 2)
+  amount      Decimal       @db.Decimal(10, 2)
   description String?
-  date        DateTime         @default(now())
+  date        DateTime      @default(now())
 
   storeId String
   store   Store  @relation(fields: [storeId], references: [id])

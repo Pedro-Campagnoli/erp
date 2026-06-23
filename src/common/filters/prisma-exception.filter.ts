@@ -1,4 +1,5 @@
 // src/common/filters/prisma-exception.filter.ts
+import { Prisma } from '@/src/generated/prisma/client';
 import {
   ArgumentsHost,
   Catch,
@@ -7,8 +8,6 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { Prisma } from '../../../generated/prisma/client';
-
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
