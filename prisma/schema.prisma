@@ -82,10 +82,10 @@ model Store {
 model User {
   id       String  @id @default(uuid())
   name     String
-  email    String
+  email    String  @unique
   password String
   active   Boolean @default(true)
-  isOwner  Boolean @default(false)  // acesso total à company, ignora UserStore
+  isOwner  Boolean @default(false) // acesso total à company, ignora UserStore
 
   companyId String
   company   Company @relation(fields: [companyId], references: [id])
@@ -97,7 +97,6 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([companyId, email])
   @@map("users")
 }
 

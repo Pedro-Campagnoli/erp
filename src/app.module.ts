@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 import { CompanyModule } from './modules/companies/companies.module';
 import { PlanModule } from './modules/plans/plans.module';
 import { UsersModule } from './modules/users/users.module';
@@ -13,6 +14,7 @@ import { PrismaModule } from './prisma/prisma.module';
     CompanyModule,
     PlanModule,
     UsersModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
